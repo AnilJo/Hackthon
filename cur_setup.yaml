@@ -1,0 +1,57 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: AWS Cost and Usage Report Setup
+
+Parameters:
+  BucketPrefix:
+    Type: String
+    Description: The name of the S3 bucket to store reports.
+    AllowedPattern: '^[a-z0-9]+(?:[.-][a-z0-9]+)*$'
+
+Resources:
+  CURBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-${AWS::AccountId}-${AWS::Region}'
+
+  CURBucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket: !Ref CURBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 'billingreports.amazonaws.com'
+            Action:
+              - 's3:GetBucketAcl'
+              - 's3:GetBucketPolicy'
+            Resource: !GetAtt CURBucket.Arn
+          - Effect: Allow
+            Principal:
+              Service: 'billingreports.amazonaws.com'
+            Action: 's3:PutObject'
+            Resource: !Sub '${CURBucket.Arn}/*'
+
+  CURReportDefinition:
+    Type: 'AWS::CUR::ReportDefinition'
+    Properties:
+      ReportName: 'MyCURReport'
+      TimeUnit: HOURLY
+      Format: textORcsv
+      Compression: GZIP
+      AdditionalSchemaElements:
+        - RESOURCES
+      S3Bucket: !Ref CURBucket
+      S3Prefix: reports
+      S3Region: !Ref 'AWS::Region'
+      AdditionalArtifacts:
+        - REDSHIFT
+        - QUICKSIGHT
+      RefreshClosedReports: True
+      ReportVersioning: CREATE_NEW_REPORT
+
+Outputs:
+  S3BucketName:
+    Description: "Name of the S3 bucket to store CUR reports"
+    Value: !Ref CURBucket
